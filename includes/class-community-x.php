@@ -106,6 +106,14 @@ class Community_X {
          */
         require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-database.php';
 
+        /**
+         * The classes responsible for core plugin functionality.
+         */
+        require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-user.php';
+        require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-profile.php';
+        require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-post.php'; // New
+        require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-category.php'; // New
+
         $this->loader = new Community_X_Loader();
     }
 
@@ -154,6 +162,9 @@ class Community_X {
         $this->loader->add_action('init', $plugin_public, 'register_community_pages');
         $this->loader->add_filter('query_vars', $plugin_public, 'add_query_vars');
         $this->loader->add_action('template_redirect', $plugin_public, 'template_redirect');
+
+        // New AJAX hook for post submission
+        $this->loader->add_action('wp_ajax_community_x_submit_post', $plugin_public, 'ajax_submit_post');
     }
 
     /**
