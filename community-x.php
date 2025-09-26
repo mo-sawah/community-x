@@ -3,7 +3,7 @@
  * Plugin Name: Community X
  * Plugin URI: https://sawahsolutions.com
  * Description: Modern WordPress Community Plugin with user profiles, frontend submission, search, and AI integration.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Mohamed Sawah
  * Author URI: https://sawahsolutions.com
  * Text Domain: community-x
@@ -23,7 +23,7 @@ if (!defined('WPINC')) {
 /**
  * Plugin version.
  */
-define('COMMUNITY_X_VERSION', '1.0.1');
+define('COMMUNITY_X_VERSION', '1.0.3');
 
 /**
  * Plugin directory path.

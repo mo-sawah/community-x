@@ -281,10 +281,7 @@ class Community_X_Public {
     }
     
     /**
-     * AJAX handler for frontend post submission.
-     * THIS IS THE NEW FUNCTION FOR PHASE 3.
-     *
-     * @since    1.0.1 
+     * Enhanced AJAX handler for frontend post submission
      */
     public function ajax_submit_post() {
         check_ajax_referer('community_x_public_nonce', 'nonce');
@@ -293,25 +290,44 @@ class Community_X_Public {
             wp_send_json_error(__('You do not have permission to create posts.', 'community-x'));
         }
         
-        $data = [
-            'title'       => isset($_POST['title']) ? sanitize_text_field($_POST['title']) : '',
-            'content'     => isset($_POST['content']) ? wp_kses_post($_POST['content']) : '',
-            'category_id' => isset($_POST['category_id']) ? intval($_POST['category_id']) : 0,
-            'tags'        => isset($_POST['tags']) ? explode(',', sanitize_text_field($_POST['tags'])) : [],
-        ];
-
-        if (empty($data['title']) || empty($data['content'])) {
-             wp_send_json_error(__('Title and content are required.', 'community-x'));
+        // Enhanced validation and sanitization
+        $title = isset($_POST['title']) ? trim(sanitize_text_field($_POST['title'])) : '';
+        $content = isset($_POST['content']) ? trim(wp_kses_post($_POST['content'])) : '';
+        $category_id = isset($_POST['category_id']) ? intval($_POST['category_id']) : 0;
+        $tags_input = isset($_POST['tags']) ? sanitize_text_field($_POST['tags']) : '';
+        
+        // Parse tags
+        $tags = array();
+        if (!empty($tags_input)) {
+            $tags = array_map('trim', explode(',', $tags_input));
+            $tags = array_filter($tags); // Remove empty tags
+            $tags = array_slice($tags, 0, 10); // Limit to 10 tags
         }
+        
+        $data = [
+            'title'       => $title,
+            'content'     => $content,
+            'category_id' => $category_id,
+            'tags'        => $tags,
+        ];
 
         $result = Community_X_Post::create_post($data);
 
         if (is_wp_error($result)) {
             wp_send_json_error($result->get_error_message());
         } else {
+            $status = get_option('community_x_moderate_all_posts', 0) ? 'pending' : 'published';
+            $message = $status === 'pending' ? 
+                __('Post submitted for review!', 'community-x') : 
+                __('Post created successfully!', 'community-x');
+                
             wp_send_json_success([
-                'message' => __('Post created successfully!', 'community-x'),
-                'redirect_url' => home_url('/community/post/' . $result . '/')
+                'message' => $message,
+                'redirect_url' => $status === 'pending' ? 
+                    home_url('/community/') : 
+                    home_url('/community/post/' . $result . '/'),
+                'post_id' => $result,
+                'status' => $status
             ]);
         }
     }
