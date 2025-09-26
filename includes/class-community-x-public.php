@@ -158,13 +158,12 @@ class Community_X_Public {
             exit;
         }
 
-        // Refined switch to prevent conflicts and use the correct template loader.
         switch ($community_page) {
             case 'main':
-                $this->load_community_template('members-directory'); // Default main page to members directory for now
+                $this->load_community_template('community-main'); // Updated to use new template
                 break;
             case 'dashboard':
-                $this->load_community_template('dashboard'); // This file doesn't exist yet
+                $this->load_community_template('dashboard');
                 break;
             case 'members':
                 $this->load_community_template('members-directory');
@@ -175,14 +174,11 @@ class Community_X_Public {
             case 'member_profile':
                 $this->load_community_template('member-profile');
                 break;
-             case 'create_post':
-                // Create post is a shortcode page, not a direct template
-                // This redirect will be handled by the page that contains the shortcode.
-                // If accessed directly, we can redirect to the main page.
-                // wp_redirect(home_url('/community/')); exit;
+            case 'create_post':
+                // This would load a create post page
                 break;
             case 'category':
-                $this->load_community_template('category'); // This file doesn't exist yet
+                $this->load_community_template('category');
                 break;
         }
     }
