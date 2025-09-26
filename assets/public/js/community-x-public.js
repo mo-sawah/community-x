@@ -1024,3 +1024,390 @@ window.CommunityXUtils = {
     return browser;
   },
 };
+
+// Enhanced interactions for Phase 4
+jQuery(document).ready(function ($) {
+  // Like/Unlike posts
+  $(document).on("click", ".like-btn", function (e) {
+    e.preventDefault();
+
+    if (!community_x_ajax.user_logged_in) {
+      CommunityXPublic.showNotification(
+        "Please log in to like posts",
+        "warning"
+      );
+      return;
+    }
+
+    var $btn = $(this);
+    var postId = $btn.data("post-id");
+    var $icon = $btn.find("i");
+    var $count = $btn.find("span");
+    var currentCount = parseInt($count.text()) || 0;
+    var isLiked = $btn.hasClass("liked");
+
+    // Optimistic UI update
+    if (isLiked) {
+      $btn.removeClass("liked");
+      $icon.removeClass("fas").addClass("far");
+      $count.text(Math.max(0, currentCount - 1));
+    } else {
+      $btn.addClass("liked");
+      $icon.removeClass("far").addClass("fas");
+      $count.text(currentCount + 1);
+    }
+
+    $btn.prop("disabled", true);
+
+    $.post(community_x_ajax.ajax_url, {
+      action: "community_x_like_post",
+      post_id: postId,
+      nonce: community_x_ajax.nonce,
+    })
+      .done(function (response) {
+        if (response.success) {
+          CommunityXPublic.showNotification(response.data.message, "success");
+          // Update all like buttons for this post
+          $('.like-btn[data-post-id="' + postId + '"]').each(function () {
+            var $otherBtn = $(this);
+            if (response.data.action === "liked") {
+              $otherBtn.addClass("liked");
+              $otherBtn.find("i").removeClass("far").addClass("fas");
+            } else {
+              $otherBtn.removeClass("liked");
+              $otherBtn.find("i").removeClass("fas").addClass("far");
+            }
+          });
+        } else {
+          // Revert optimistic update on error
+          if (!isLiked) {
+            $btn.removeClass("liked");
+            $icon.removeClass("fas").addClass("far");
+            $count.text(currentCount);
+          } else {
+            $btn.addClass("liked");
+            $icon.removeClass("far").addClass("fas");
+            $count.text(currentCount);
+          }
+          CommunityXPublic.showNotification(
+            "Failed to update like status",
+            "error"
+          );
+        }
+      })
+      .fail(function () {
+        // Revert optimistic update on error
+        if (!isLiked) {
+          $btn.removeClass("liked");
+          $icon.removeClass("fas").addClass("far");
+          $count.text(currentCount);
+        } else {
+          $btn.addClass("liked");
+          $icon.removeClass("far").addClass("fas");
+          $count.text(currentCount);
+        }
+        CommunityXPublic.showNotification("Network error occurred", "error");
+      })
+      .always(function () {
+        $btn.prop("disabled", false);
+      });
+  });
+
+  // Bookmark posts
+  $(document).on("click", ".bookmark-btn", function (e) {
+    e.preventDefault();
+
+    if (!community_x_ajax.user_logged_in) {
+      CommunityXPublic.showNotification(
+        "Please log in to bookmark posts",
+        "warning"
+      );
+      return;
+    }
+
+    var $btn = $(this);
+    var postId = $btn.data("post-id");
+
+    $btn.prop("disabled", true).addClass("loading");
+
+    $.post(community_x_ajax.ajax_url, {
+      action: "community_x_bookmark_post",
+      post_id: postId,
+      nonce: community_x_ajax.nonce,
+    })
+      .done(function (response) {
+        if (response.success) {
+          $btn.addClass("bookmarked");
+          $btn.find("i").removeClass("far").addClass("fas");
+          CommunityXPublic.showNotification(response.data.message, "success");
+        } else {
+          CommunityXPublic.showNotification("Failed to bookmark post", "error");
+        }
+      })
+      .always(function () {
+        $btn.prop("disabled", false).removeClass("loading");
+      });
+  });
+
+  // Advanced search with suggestions
+  var searchTimeout;
+  var $searchInput = $(".search-input, .members-search-input");
+  var $suggestionsContainer = $('<div class="search-suggestions"></div>');
+
+  $searchInput.after($suggestionsContainer);
+
+  $searchInput.on("input", function () {
+    var query = $(this).val().trim();
+    var $container = $(this).siblings(".search-suggestions");
+
+    clearTimeout(searchTimeout);
+
+    if (query.length < 2) {
+      $container.hide().empty();
+      return;
+    }
+
+    searchTimeout = setTimeout(function () {
+      $.post(community_x_ajax.ajax_url, {
+        action: "community_x_search_suggestions",
+        query: query,
+      }).done(function (response) {
+        if (response.success && response.data.length > 0) {
+          var html = '<div class="suggestions-list">';
+          response.data.forEach(function (suggestion) {
+            html +=
+              '<div class="suggestion-item" data-text="' +
+              suggestion.text +
+              '">';
+            html += '<i class="fas fa-tag"></i>';
+            html += "<span>" + suggestion.text + "</span>";
+            if (suggestion.count) {
+              html += "<small>(" + suggestion.count + ")</small>";
+            }
+            html += "</div>";
+          });
+          html += "</div>";
+
+          $container.html(html).show();
+        } else {
+          $container.hide().empty();
+        }
+      });
+    }, 300);
+  });
+
+  // Handle suggestion clicks
+  $(document).on("click", ".suggestion-item", function () {
+    var text = $(this).data("text");
+    var $input = $(this)
+      .closest(".search-suggestions")
+      .siblings(".search-input, .members-search-input");
+    $input.val(text);
+    $(this).closest(".search-suggestions").hide();
+    $input.closest("form").submit();
+  });
+
+  // Hide suggestions when clicking outside
+  $(document).on("click", function (e) {
+    if (!$(e.target).closest(".search-input, .search-suggestions").length) {
+      $(".search-suggestions").hide();
+    }
+  });
+
+  // Load more activity feed
+  $(document).on("click", ".load-more-activity", function () {
+    var $btn = $(this);
+    var page = $btn.data("page");
+    var originalText = $btn.html();
+
+    $btn
+      .html('<i class="fas fa-spinner fa-spin"></i> Loading...')
+      .prop("disabled", true);
+
+    $.post(community_x_ajax.ajax_url, {
+      action: "community_x_load_activity",
+      page: page,
+      nonce: community_x_ajax.nonce,
+    })
+      .done(function (response) {
+        if (response.success && response.data.length > 0) {
+          var html = "";
+          response.data.forEach(function (activity) {
+            html += buildActivityHTML(activity);
+          });
+
+          $(".activity-feed-list").append(html);
+          $btn.data("page", page + 1);
+
+          if (response.data.length < 10) {
+            $btn.hide(); // No more items
+          }
+        } else {
+          $btn.hide();
+          CommunityXPublic.showNotification(
+            "No more activities to load",
+            "info"
+          );
+        }
+      })
+      .always(function () {
+        $btn.html(originalText).prop("disabled", false);
+      });
+  });
+
+  // Enhanced share functionality
+  $(document).on("click", ".share-btn, .share-post-btn", function (e) {
+    e.preventDefault();
+    var postId = $(this).data("post-id");
+    openShareModal(postId);
+  });
+
+  function openShareModal(postId) {
+    var postUrl = window.location.origin + "/community/post/" + postId + "/";
+    var postTitle = $("h1.post-article-title").text() || "Check out this post";
+
+    if (navigator.share) {
+      navigator
+        .share({
+          title: postTitle,
+          url: postUrl,
+        })
+        .catch(console.error);
+    } else {
+      // Fallback share modal
+      var modal = `
+                <div class="share-modal-overlay">
+                    <div class="share-modal">
+                        <div class="share-header">
+                            <h3>Share this post</h3>
+                            <button class="close-share">&times;</button>
+                        </div>
+                        <div class="share-options">
+                            <button class="share-option" data-share="copy">
+                                <i class="fas fa-link"></i>
+                                <span>Copy Link</span>
+                            </button>
+                            <button class="share-option" data-share="twitter">
+                                <i class="fab fa-twitter"></i>
+                                <span>Twitter</span>
+                            </button>
+                            <button class="share-option" data-share="facebook">
+                                <i class="fab fa-facebook"></i>
+                                <span>Facebook</span>
+                            </button>
+                            <button class="share-option" data-share="linkedin">
+                                <i class="fab fa-linkedin"></i>
+                                <span>LinkedIn</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+      $("body").append(modal);
+
+      $('.share-option[data-share="copy"]').on("click", function () {
+        navigator.clipboard.writeText(postUrl).then(function () {
+          CommunityXPublic.showNotification(
+            "Link copied to clipboard!",
+            "success"
+          );
+          $(".share-modal-overlay").remove();
+        });
+      });
+
+      $('.share-option[data-share="twitter"]').on("click", function () {
+        window.open(
+          "https://twitter.com/intent/tweet?url=" +
+            encodeURIComponent(postUrl) +
+            "&text=" +
+            encodeURIComponent(postTitle)
+        );
+        $(".share-modal-overlay").remove();
+      });
+
+      $('.share-option[data-share="facebook"]').on("click", function () {
+        window.open(
+          "https://www.facebook.com/sharer/sharer.php?u=" +
+            encodeURIComponent(postUrl)
+        );
+        $(".share-modal-overlay").remove();
+      });
+
+      $('.share-option[data-share="linkedin"]').on("click", function () {
+        window.open(
+          "https://www.linkedin.com/sharing/share-offsite/?url=" +
+            encodeURIComponent(postUrl)
+        );
+        $(".share-modal-overlay").remove();
+      });
+
+      $(".close-share, .share-modal-overlay").on("click", function (e) {
+        if (e.target === this) {
+          $(".share-modal-overlay").remove();
+        }
+      });
+    }
+  }
+
+  function buildActivityHTML(activity) {
+    var actionText = "";
+    var actionIcon = "";
+
+    switch (activity.action) {
+      case "post_created":
+        actionIcon = "fas fa-plus-circle";
+        actionText = "created a new post";
+        break;
+      case "post_liked":
+        actionIcon = "fas fa-heart";
+        actionText = "liked a post";
+        break;
+      case "user_followed":
+        actionIcon = "fas fa-user-plus";
+        actionText = "followed someone";
+        break;
+    }
+
+    var html =
+      '<div class="activity-feed-item" data-activity-id="' + activity.id + '">';
+    html += '<div class="activity-avatar">';
+    html +=
+      '<img src="' +
+      activity.avatar_url +
+      '" alt="' +
+      activity.user_name +
+      '" />';
+    html += "</div>";
+    html += '<div class="activity-content">';
+    html += '<div class="activity-header">';
+    html +=
+      '<a href="/community/member/' +
+      activity.user_login +
+      '/" class="activity-user">' +
+      activity.user_name +
+      "</a>";
+    html +=
+      '<span class="activity-action"><i class="' +
+      actionIcon +
+      '"></i> ' +
+      actionText +
+      "</span>";
+    html += '<span class="activity-time">' + activity.time_ago + "</span>";
+    html += "</div>";
+
+    if (activity.post_title) {
+      html += '<div class="activity-object">';
+      html +=
+        '<a href="/community/post/' +
+        activity.post_id +
+        '/" class="activity-post-link">';
+      html += '<i class="fas fa-file-alt"></i>' + activity.post_title;
+      html += "</a></div>";
+    }
+
+    html += "</div></div>";
+
+    return html;
+  }
+});

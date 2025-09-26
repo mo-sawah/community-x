@@ -114,6 +114,10 @@ class Community_X {
         require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-post.php'; // New
         require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-category.php'; // New
 
+        // Add these lines to the existing load_dependencies method
+        require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-interactions.php';
+        require_once COMMUNITY_X_PLUGIN_PATH . 'includes/class-community-x-search.php';
+
         $this->loader = new Community_X_Loader();
     }
 
@@ -162,6 +166,12 @@ class Community_X {
         $this->loader->add_action('init', $plugin_public, 'register_community_pages');
         $this->loader->add_filter('query_vars', $plugin_public, 'add_query_vars');
         $this->loader->add_action('template_redirect', $plugin_public, 'template_redirect');
+
+        // Add these AJAX hooks to the existing define_public_hooks method
+        $this->loader->add_action('wp_ajax_community_x_like_post', $plugin_public, 'ajax_like_post');
+        $this->loader->add_action('wp_ajax_community_x_bookmark_post', $plugin_public, 'ajax_bookmark_post');
+        $this->loader->add_action('wp_ajax_community_x_search', $plugin_public, 'ajax_search');
+        $this->loader->add_action('wp_ajax_nopriv_community_x_search', $plugin_public, 'ajax_search');
 
         // New AJAX hook for post submission
         $this->loader->add_action('wp_ajax_community_x_submit_post', $plugin_public, 'ajax_submit_post');
